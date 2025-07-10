@@ -13,6 +13,9 @@ on:
         description: 'AWS Region of the ECR registry'
         required: true
         default: 'ap-south-1'
+      azure_subscription_id:
+        description: 'Azure Subscription ID where ACR is located'
+        required: true
 
 jobs:
   migrate-images:
@@ -48,3 +51,4 @@ jobs:
           ECR_ACCOUNT_ID: ${{ github.event.inputs.ecr_account_id }}
           ACR_NAME: ${{ github.event.inputs.acr_name }}
           AWS_REGION: ${{ github.event.inputs.aws_region }}
+          AZURE_SUBSCRIPTION_ID: ${{ github.event.inputs.azure_subscription_id }}

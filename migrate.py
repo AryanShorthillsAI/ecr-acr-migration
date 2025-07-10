@@ -110,6 +110,10 @@ def migrate_image_via_acr_import(repo, image_id, ecr_user, ecr_pass):
 def main():
     """Main function to orchestrate the ECR to ACR migration."""
     try:
+        # Set the Azure subscription context
+        logging.info(f"Setting Azure subscription to: {AZURE_SUBSCRIPTION_ID}")
+        subprocess.run(["az", "account", "set", "--subscription", AZURE_SUBSCRIPTION_ID], check=True, capture_output=True, text=True)
+
         ecr_user, ecr_pass = get_ecr_credentials()
         repos = get_all_repositories()
         logging.info(f"Found {len(repos)} repositories in ECR.")
