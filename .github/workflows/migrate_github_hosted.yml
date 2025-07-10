@@ -1,0 +1,50 @@
+name: Migrate ECR Images to ACR (GitHub Hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ecr_account_id:
+        description: 'AWS Account ID for ECR'
+        required: true
+      acr_name:
+        description: 'Name of the Azure Container Registry'
+        required: true
+      aws_region:
+        description: 'AWS Region of the ECR registry'
+        required: true
+        default: 'ap-south-1'
+
+jobs:
+  migrate-images:
+    runs-on: ubuntu-latest # Changed to GitHub-hosted runner
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run ECR to ACR Migration Script
+        run: python migrate.py
+        env:
+          ECR_ACCOUNT_ID: ${{ github.event.inputs.ecr_account_id }}
+          ACR_NAME: ${{ github.event.inputs.acr_name }}
+          AWS_REGION: ${{ github.event.inputs.aws_region }}
