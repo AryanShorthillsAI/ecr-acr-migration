@@ -4,6 +4,7 @@ import logging
 import os
 from botocore.exceptions import ClientError
 
+
 # ============ CONFIGURATION (from Environment Variables) ============
 AWS_REGION = os.environ.get("AWS_REGION")
 ECR_ACCOUNT_ID = os.environ.get("ECR_ACCOUNT_ID")
