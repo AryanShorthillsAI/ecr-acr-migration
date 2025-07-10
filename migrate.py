@@ -5,33 +5,21 @@ import os
 from botocore.exceptions import ClientError
 
 
-# ============ CONFIGURATION (from Environment Variables) ============
-AWS_REGION = os.environ.get("AWS_REGION")
-ECR_ACCOUNT_ID = os.environ.get("ECR_ACCOUNT_ID")
-ACR_NAME = os.environ.get("ACR_NAME")
-
-# Check for mandatory variables
-if not all([AWS_REGION, ECR_ACCOUNT_ID, ACR_NAME]):
-    raise ValueError("AWS_REGION, ECR_ACCOUNT_ID, and ACR_NAME environment variables must be set.")
-
-ECR_URI = f"{ECR_ACCOUNT_ID}.dkr.ecr.{AWS_REGION}.amazonaws.com"
+# ============ CONFIGURATION (Constants) ============ 
 LOG_FILE = "ecr_to_acr_migration.log"
 
-# ============ SETUP LOGGING ============
+# ============ SETUP LOGGING ============ 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()]
 )
 
-# ============ INIT AWS ============
-ecr = boto3.client('ecr', region_name=AWS_REGION)
-
-def get_ecr_credentials():
+def get_ecr_credentials(ecr_client):
     """Gets temporary ECR login credentials."""
     try:
         logging.info("Getting ECR authentication token...")
-        response = ecr.get_authorization_token()
+        response = ecr_client.get_authorization_token()
         auth_data = response['authorizationData'][0]
         token = auth_data['authorizationToken']
         # The username is always 'AWS' for ECR, and the password is the token
@@ -40,10 +28,10 @@ def get_ecr_credentials():
         logging.error(f"❌ Could not get ECR credentials: {e}")
         raise
 
-def get_all_repositories():
+def get_all_repositories(ecr_client):
     """Gets a list of all repository names from ECR."""
     repos = []
-    paginator = ecr.get_paginator('describe_repositories')
+    paginator = ecr_client.get_paginator('describe_repositories')
     try:
         for page in paginator.paginate():
             for repo in page['repositories']:
@@ -53,10 +41,10 @@ def get_all_repositories():
         raise
     return repos
 
-def get_image_ids(repository_name):
+def get_image_ids(repository_name, ecr_client):
     """Gets all image identifiers (tags and digests) for a repository."""
     image_ids = []
-    paginator = ecr.get_paginator('list_images')
+    paginator = ecr_client.get_paginator('list_images')
     try:
         for page in paginator.paginate(repositoryName=repository_name):
             image_ids.extend(page['imageIds'])
@@ -70,7 +58,7 @@ def get_image_ids(repository_name):
             raise
     return image_ids
 
-def migrate_image_via_acr_import(repo, image_id, ecr_user, ecr_pass):
+def migrate_image_via_acr_import(repo, image_id, ecr_user, ecr_pass, ecr_uri, acr_name):
     """Migrates a single image using 'az acr import', only if it has a tag."""
     tag = image_id.get('imageTag')
 
@@ -79,13 +67,13 @@ def migrate_image_via_acr_import(repo, image_id, ecr_user, ecr_pass):
         return
 
     # If we reach here, it means 'tag' exists.
-    source_image = f"{ECR_URI}/{repo}:{tag}"
+    source_image = f"{ecr_uri}/{repo}:{tag}"
     target_image = f"{repo}:{tag}"
-    logging.info(f" Importing tagged image {source_image} to {ACR_NAME}...")
+    logging.info(f" Importing tagged image {source_image} to {acr_name}...")
 
     command = [
         "az", "acr", "import",
-        "--name", ACR_NAME,
+        "--name", acr_name,
         "--source", source_image,
         "--image", target_image,
         "--username", ecr_user,
@@ -110,33 +98,46 @@ def migrate_image_via_acr_import(repo, image_id, ecr_user, ecr_pass):
 def main():
     """Main function to orchestrate the ECR to ACR migration."""
     try:
-        # Set the Azure subscription context
-        logging.info(f"Setting Azure subscription to: {AZURE_SUBSCRIPTION_ID}")
-        subprocess.run(["az", "account", "set", "--subscription", AZURE_SUBSCRIPTION_ID], check=True, capture_output=True, text=True)
+        # Retrieve environment variables inside main
+        aws_region = os.environ.get("AWS_REGION")
+        ecr_account_id = os.environ.get("ECR_ACCOUNT_ID")
+        acr_name = os.environ.get("ACR_NAME")
+        azure_subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
 
-        ecr_user, ecr_pass = get_ecr_credentials()
-        repos = get_all_repositories()
+        # Check for mandatory variables
+        if not all([aws_region, ecr_account_id, acr_name, azure_subscription_id]):
+            raise ValueError("AWS_REGION, ECR_ACCOUNT_ID, ACR_NAME, and AZURE_SUBSCRIPTION_ID environment variables must be set.")
+
+        ecr_uri = f"{ecr_account_id}.dkr.ecr.{aws_region}.amazonaws.com"
+        
+        # Initialize ECR client here
+        ecr_client = boto3.client('ecr', region_name=aws_region)
+
+        # Set the Azure subscription context
+        logging.info(f"Setting Azure subscription to: {azure_subscription_id}")
+        subprocess.run(["az", "account", "set", "--subscription", azure_subscription_id], check=True, capture_output=True, text=True)
+
+        ecr_user, ecr_pass = get_ecr_credentials(ecr_client) # Pass ecr_client
+        repos = get_all_repositories(ecr_client) # Pass ecr_client
         logging.info(f"Found {len(repos)} repositories in ECR.")
 
         for repo in repos:
             logging.info(f"Processing repository: {repo}")
             
-            # Proactively create the repository in ACR to avoid import errors.
-            # This command is idempotent; it does nothing if the repo already exists.
             subprocess.run(
-                ["az", "acr", "repository", "create", "--name", ACR_NAME, "--repository", repo],
+                ["az", "acr", "repository", "create", "--name", acr_name, "--repository", repo],
                 capture_output=True,
                 text=True
             )
 
-            image_ids = get_image_ids(repo)
+            image_ids = get_image_ids(repo, ecr_client) # Pass ecr_client
             if not image_ids:
                 logging.info(f"No images found in {repo}, skipping.")
                 continue
             
             logging.info(f"Found {len(image_ids)} images in {repo}. Starting migration...")
             for image_id in image_ids:
-                migrate_image_via_acr_import(repo, image_id, ecr_user, ecr_pass)
+                migrate_image_via_acr_import(repo, image_id, ecr_user, ecr_pass, ecr_uri, acr_name) # Pass ecr_uri, acr_name
 
     except Exception as e:
         logging.critical(f"A critical error occurred during the migration process: {e}")
