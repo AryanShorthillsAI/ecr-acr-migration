@@ -15,6 +15,20 @@ logging.basicConfig(
     handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()]
 )
 
+def check_acr_exists(acr_name, subscription_id):
+    try:
+        result = subprocess.run(
+            ["az", "acr", "show", "--name", acr_name, "--subscription", subscription_id],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        return True
+    except subprocess.CalledProcessError:
+        logging.critical(f"❌ ACR '{acr_name}' not found in subscription '{subscription_id}'")
+        return False
+
+
 def get_ecr_credentials(ecr_client):
     """Gets temporary ECR login credentials."""
     try:
@@ -103,6 +117,9 @@ def main():
         ecr_account_id = os.environ.get("ECR_ACCOUNT_ID")
         acr_name = os.environ.get("ACR_NAME")
         azure_subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+
+        if not check_acr_exists(acr_name, azure_subscription_id):
+            raise Exception("Aborting migration due to missing ACR.")
 
         # Check for mandatory variables
         if not all([aws_region, ecr_account_id, acr_name, azure_subscription_id]):
