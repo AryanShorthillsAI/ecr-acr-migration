@@ -71,28 +71,17 @@ def get_image_ids(repository_name):
     return image_ids
 
 def migrate_image_via_acr_import(repo, image_id, ecr_user, ecr_pass):
-    """Migrates a single image using 'az acr import', creating tags for digest-only images."""
+    """Migrates a single image using 'az acr import', only if it has a tag."""
     tag = image_id.get('imageTag')
-    digest = image_id.get('imageDigest')
 
-    if tag:
-        # Case 1: The image has a tag. Use it directly.
-        source_image = f"{ECR_URI}/{repo}:{tag}"
-        target_image = f"{repo}:{tag}"
-        logging.info(f" Importing tagged image {source_image} to {ACR_NAME}...")
-
-    elif digest:
-        # Case 2: The image has no tag. We MUST create one for the import.
-        # We'll create a tag based on the digest to ensure it's unique.
-        new_tag = digest.replace(":", "-")
-        source_image = f"{ECR_URI}/{repo}@{digest}" # Reference source by digest
-        target_image = f"{repo}:{new_tag}"         # Create new tag for target
-        logging.info(f"No tag found for digest. Importing {source_image} by creating new tag: {new_tag}")
-
-    else:
-        # Case 3: No tag or digest found. Skip.
-        logging.warning(f"⚠️ No tag or digest for an image in {repo}, skipping.")
+    if not tag:
+        logging.info(f"ℹ️ Skipping untagged image in {repo} (digest: {image_id.get('imageDigest')}). Only tagged images are migrated.")
         return
+
+    # If we reach here, it means 'tag' exists.
+    source_image = f"{ECR_URI}/{repo}:{tag}"
+    target_image = f"{repo}:{tag}"
+    logging.info(f" Importing tagged image {source_image} to {ACR_NAME}...")
 
     command = [
         "az", "acr", "import",
