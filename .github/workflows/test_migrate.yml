@@ -36,7 +36,7 @@ jobs:
 
       - name: 🐳 Install Docker
         uses: docker/setup-buildx-action@v3
-        
+
       - name: Log in to Azure
         uses: azure/login@v1
         with:
@@ -50,5 +50,5 @@ jobs:
 
       - name: 🚀 Run migration script
         run: |
-          chmod +x migrate-one-ecr-to-acr.sh
+          chmod +x test_migrate.sh
           ./test_migrate.sh
