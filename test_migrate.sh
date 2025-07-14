@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-REPO_NAME="geneconnect-doctor"  # ✅ Change to your ECR repo name for testing
-
 ECR_URL="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 ACR_URL="$ACR_NAME.azurecr.io"
+
+echo "📦 Target ECR repository: $REPO_NAME"
 
 echo "🔐 Logging in to Azure ACR..."
 az acr login --name "$ACR_NAME"
