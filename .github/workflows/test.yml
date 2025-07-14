@@ -19,6 +19,9 @@ on:
       repo_name:
         description: 'Name of the ECR repository to migrate'
         required: true
+      image_tag:
+        description: 'Specific image tag to migrate'
+        required: true
 
 jobs:
   migrate:
@@ -28,6 +31,7 @@ jobs:
       AWS_ACCOUNT_ID: ${{ github.event.inputs.ecr_account_id }}
       ACR_NAME: ${{ github.event.inputs.acr_name }}
       REPO_NAME: ${{ github.event.inputs.repo_name }}
+      IMAGE_TAG: ${{ github.event.inputs.image_tag }}
 
     steps:
       - name: ⬇️ Checkout repo
