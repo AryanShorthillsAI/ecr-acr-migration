@@ -5,7 +5,7 @@ This project provides a fully automated solution for migrating Docker container 
 It uses a Python script orchestrated by a GitHub Actions workflow to perform a server-side import (`az acr import`), which is the most efficient and cost-effective method. This approach avoids pulling images to the local disk, saving significant disk space and network bandwidth.
 
 ## Features
-
+ 
 - **Automated Migration**: Trigger the entire migration process with a single click from the GitHub Actions tab.
 - **Efficient & Cost-Effective**: Uses `az acr import` for a direct, server-side data transfer from AWS to Azure.
 - **Zero Local Disk Usage**: The runner VM does not store the container images, making it suitable for runners with limited disk space.
