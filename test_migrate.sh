@@ -26,7 +26,7 @@ for tag in $tags; do
 
   echo "🚀 Migrating: $old_image ➝ $new_image"
 
-  docker pull "$old_image"
+  docker pull "$old_image" --platform linux/arm64
   docker tag "$old_image" "$new_image"
   docker push "$new_image"
 
