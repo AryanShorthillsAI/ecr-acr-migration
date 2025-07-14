@@ -1,10 +1,20 @@
 #!/bin/bash
 set -e
 
+# Check required variables
+if [[ -z "$AWS_ACCOUNT_ID" || -z "$AWS_REGION" || -z "$ACR_NAME" || -z "$REPO_NAME" || -z "$IMAGE_TAG" ]]; then
+  echo "❌ Required environment variables not set."
+  echo "Make sure AWS_ACCOUNT_ID, AWS_REGION, ACR_NAME, REPO_NAME, and IMAGE_TAG are set."
+  exit 1
+fi
+
 ECR_URL="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 ACR_URL="$ACR_NAME.azurecr.io"
 
-echo "📦 Target ECR repository: $REPO_NAME"
+old_image="$ECR_URL/$REPO_NAME:$IMAGE_TAG"
+new_image="$ACR_URL/$REPO_NAME:$IMAGE_TAG"
+
+echo "📦 Target Image: $old_image ➝ $new_image"
 
 echo "🔐 Logging in to Azure ACR..."
 az acr login --name "$ACR_NAME"
@@ -12,38 +22,16 @@ az acr login --name "$ACR_NAME"
 echo "🔐 Logging in to AWS ECR..."
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_URL"
 
-echo "📦 Fetching image tags from ECR repo: $REPO_NAME"
-tags=$(aws ecr list-images --repository-name "$REPO_NAME" --region "$AWS_REGION" --query 'imageIds[*].imageTag' --output text)
+echo "🔍 Pulling image from ECR..."
+docker pull "$old_image"
 
-# Skip list
-skip_tags=("qwen-sagemaker-training" "qwen-sagemaker-training-2")
+echo "🔄 Tagging image for ACR..."
+docker tag "$old_image" "$new_image"
 
-for tag in $tags; do
-  if [ "$tag" = "None" ]; then
-    echo "⚠️ Skipping untagged image..."
-    continue
-  fi
+echo "📤 Pushing to ACR..."
+docker push "$new_image"
 
-  # Skip manually excluded tags
-  if [[ " ${skip_tags[@]} " =~ " ${tag} " ]]; then
-    echo "⚠️ Skipping excluded tag: $tag"
-    continue
-  fi
+echo "🧹 Cleaning up local Docker images..."
+docker rmi "$new_image" "$old_image" || true
 
-  old_image="$ECR_URL/$REPO_NAME:$tag"
-  new_image="$ACR_URL/$REPO_NAME:$tag"
-
-  echo "🔍 Checking if $new_image already exists in ACR..."
-  if az acr repository show-manifests --name "$ACR_NAME" --repository "$REPO_NAME" --query "[?tags[?contains(@, '$tag')]]" --output tsv | grep -q "$tag"; then
-    echo "✅ $new_image already exists. Skipping..."
-    continue
-  fi
-
-  echo "🚀 Migrating: $old_image ➝ $new_image"
-  docker pull "$old_image"
-  docker tag "$old_image" "$new_image"
-  docker push "$new_image"
-
-  echo "🧹 Cleaning up local Docker images..."
-  docker rmi "$new_image" "$old_image" || true
-done
+echo "✅ Migration complete for $IMAGE_TAG"
