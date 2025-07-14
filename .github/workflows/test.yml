@@ -1,0 +1,54 @@
+name: Migrate ECR to ACR
+
+on:
+  workflow_dispatch:
+    inputs:
+      ecr_account_id:
+        description: 'AWS Account ID for ECR'
+        required: true
+      acr_name:
+        description: 'Name of the Azure Container Registry'
+        required: true
+      aws_region:
+        description: 'AWS Region of the ECR registry'
+        required: true
+        default: 'ap-south-1'
+      azure_subscription_id:
+        description: 'Azure Subscription ID where ACR is located'
+        required: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ github.event.inputs.aws_region }}
+      AWS_ACCOUNT_ID: ${{ github.event.inputs.ecr_account_id }}
+      ACR_NAME: ${{ github.event.inputs.acr_name }}
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 🧰 Set up Python (needed for AWS CLI install)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 🐳 Install Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: 🔐 AWS Configure
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set region $AWS_REGION
+
+      - name: 🚀 Run migration script
+        run: |
+          chmod +x test_migrate.sh
+          ./test_migrate.sh
