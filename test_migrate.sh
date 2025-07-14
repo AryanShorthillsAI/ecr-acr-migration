@@ -24,9 +24,14 @@ for tag in $tags; do
   old_image="$ECR_URL/$REPO_NAME:$tag"
   new_image="$ACR_URL/$REPO_NAME:$tag"
 
-  echo "🚀 Migrating: $old_image ➝ $new_image"
+  echo "🔍 Checking if $new_image already exists in ACR..."
+  if az acr repository show-manifests --name "$ACR_NAME" --repository "$REPO_NAME" --query "[?tags[?contains(@, '$tag')]]" --output tsv | grep -q "$tag"; then
+    echo "✅ $new_image already exists. Skipping..."
+    continue
+  fi
 
-  docker pull "$old_image" --platform linux/arm64
+  echo "🚀 Migrating: $old_image ➝ $new_image"
+  docker pull "$old_image"
   docker tag "$old_image" "$new_image"
   docker push "$new_image"
 
