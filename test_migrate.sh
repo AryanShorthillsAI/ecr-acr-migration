@@ -15,9 +15,18 @@ aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS 
 echo "📦 Fetching image tags from ECR repo: $REPO_NAME"
 tags=$(aws ecr list-images --repository-name "$REPO_NAME" --region "$AWS_REGION" --query 'imageIds[*].imageTag' --output text)
 
+# Skip list
+skip_tags=("qwen-sagemaker-training" "qwen-sagemaker-training-2")
+
 for tag in $tags; do
   if [ "$tag" = "None" ]; then
     echo "⚠️ Skipping untagged image..."
+    continue
+  fi
+
+  # Skip manually excluded tags
+  if [[ " ${skip_tags[@]} " =~ " ${tag} " ]]; then
+    echo "⚠️ Skipping excluded tag: $tag"
     continue
   fi
 
